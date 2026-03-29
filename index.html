@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Invoice Audit Intelligence — Mosaic Wellness</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --ink: #0d0d0d;
+    --paper: #f5f0e8;
+    --cream: #ece6d6;
+    --red: #c0392b;
+    --red-soft: #f9ebe9;
+    --green: #1a6b3c;
+    --green-soft: #e8f4ed;
+    --amber: #b45309;
+    --amber-soft: #fef3c7;
+    --rule: #c8bfaa;
+    --muted: #6b6258;
+    --card: #ffffff;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 15px; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8bfaa' fill-opacity='0.18'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+
+  /* HEADER */
+  .header {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 2.5rem 3rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::after {
+    content: 'AUDIT';
+    position: absolute;
+    right: -1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'DM Serif Display', serif;
+    font-size: 9rem;
+    color: rgba(255,255,255,0.04);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .header-top { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+  .brand { display: flex; align-items: center; gap: 0.75rem; }
+  .brand-dot { width: 10px; height: 10px; background: var(--red); border-radius: 50%; flex-shrink: 0; }
+  .brand-name { font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+  .header h1 { font-family: 'DM Serif Display', serif; font-size: 2.8rem; line-height: 1.1; margin-top: 1.2rem; }
+  .header h1 em { font-style: italic; color: #e8b89a; }
+  .header-sub { margin-top: 0.5rem; font-size: 0.85rem; color: rgba(255,255,255,0.5); letter-spacing: 0.05em; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.75rem; border-radius: 999px;
+    font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+    font-weight: 600;
+  }
+  .pill-loading { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.6); }
+  .pill-done { background: #1a6b3c22; color: #4ade80; border: 1px solid #4ade8044; }
+  .pill-err { background: #c0392b22; color: #f87171; border: 1px solid #f8717144; }
+  .pulse { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(0.7)} }
+
+  /* MAIN */
+  .main { max-width: 1300px; margin: 0 auto; padding: 2.5rem 2rem 4rem; }
+
+  /* LOADING */
+  .loading-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 60vh; gap: 2rem;
+  }
+  .loading-title { font-family: 'DM Serif Display', serif; font-size: 2rem; color: var(--muted); }
+  .progress-track {
+    width: 320px; height: 4px; background: var(--rule); border-radius: 2px; overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%; background: var(--ink); border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+  .progress-label { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--muted); }
+
+  /* KPI ROW */
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .kpi-card {
+    background: var(--card); border-radius: 12px; padding: 1.4rem 1.6rem;
+    box-shadow: var(--shadow); position: relative; overflow: hidden;
+    border-top: 4px solid transparent;
+    animation: fadeUp 0.5s ease both;
+  }
+  .kpi-card.danger { border-top-color: var(--red); }
+  .kpi-card.warn { border-top-color: var(--amber); }
+  .kpi-card.ok { border-top-color: var(--green); }
+  .kpi-card.neutral { border-top-color: var(--ink); }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+  .kpi-label { font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .kpi-value { font-family: 'DM Serif Display', serif; font-size: 2.2rem; line-height: 1.1; margin-top: 0.4rem; }
+  .kpi-value.danger { color: var(--red); }
+  .kpi-value.warn { color: var(--amber); }
+  .kpi-value.ok { color: var(--green); }
+  .kpi-sub { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; font-family: 'DM Mono', monospace; }
+
+  /* SECTION */
+  .section { margin-bottom: 2.5rem; }
+  .section-header {
+    display: flex; align-items: baseline; gap: 1rem;
+    border-bottom: 1px solid var(--rule); padding-bottom: 0.6rem; margin-bottom: 1.2rem;
+  }
+  .section-title { font-family: 'DM Serif Display', serif; font-size: 1.5rem; }
+  .section-count { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--muted); }
+
+  /* FINDINGS GRID */
+  .findings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
+  .finding-card {
+    background: var(--card); border-radius: 10px; padding: 1.3rem 1.5rem;
+    box-shadow: var(--shadow);
+    border-left: 3px solid var(--rule);
+    animation: fadeUp 0.5s ease both;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .finding-card:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+  .finding-card.critical { border-left-color: var(--red); }
+  .finding-card.warn { border-left-color: var(--amber); }
+  .finding-card.info { border-left-color: #3b82f6; }
+  .finding-type {
+    display: inline-block; font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; margin-bottom: 0.6rem;
+  }
+  .finding-type.critical { background: var(--red-soft); color: var(--red); }
+  .finding-type.warn { background: var(--amber-soft); color: var(--amber); }
+  .finding-type.info { background: #eff6ff; color: #1d4ed8; }
+  .finding-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem; }
+  .finding-amount { font-family: 'DM Serif Display', serif; font-size: 1.6rem; color: var(--red); }
+  .finding-amount.warn { color: var(--amber); }
+  .finding-desc { font-size: 0.78rem; color: var(--muted); margin-top: 0.4rem; line-height: 1.5; }
+
+  /* CHART GRID */
+  .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem; }
+  .chart-card {
+    background: var(--card); border-radius: 12px; padding: 1.5rem;
+    box-shadow: var(--shadow); animation: fadeUp 0.5s ease both;
+  }
+  .chart-card h3 { font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 1rem; font-weight: 600; }
+  .chart-wrap { position: relative; height: 240px; }
+
+  /* TABLE */
+  .table-wrap { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; animation: fadeUp 0.5s ease both; }
+  .table-toolbar {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    gap: 0.75rem; padding: 1rem 1.2rem; border-bottom: 1px solid var(--cream);
+  }
+  .table-toolbar h3 { font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .search-box {
+    padding: 0.4rem 0.8rem; border: 1px solid var(--rule); border-radius: 6px;
+    font-family: 'DM Mono', monospace; font-size: 0.78rem; background: var(--paper);
+    color: var(--ink); outline: none; width: 200px;
+  }
+  .search-box:focus { border-color: var(--ink); }
+  .filter-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .filter-btn {
+    padding: 0.3rem 0.7rem; border-radius: 5px; border: 1px solid var(--rule);
+    font-size: 0.72rem; cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 600;
+    background: transparent; color: var(--muted); transition: all 0.15s; letter-spacing: 0.04em;
+  }
+  .filter-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .filter-btn:hover:not(.active) { background: var(--cream); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  thead { background: var(--cream); }
+  th {
+    padding: 0.7rem 1rem; text-align: left; font-size: 0.65rem;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  th:hover { color: var(--ink); }
+  td { padding: 0.65rem 1rem; border-bottom: 1px solid var(--cream); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #faf8f5; }
+  .badge {
+    display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px;
+    font-size: 0.65rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .badge-red { background: var(--red-soft); color: var(--red); }
+  .badge-amber { background: var(--amber-soft); color: var(--amber); }
+  .badge-green { background: var(--green-soft); color: var(--green); }
+  .badge-gray { background: var(--cream); color: var(--muted); }
+  .mono { font-family: 'DM Mono', monospace; }
+  .text-red { color: var(--red); font-weight: 600; }
+  .text-green { color: var(--green); font-weight: 600; }
+  .pct-bar-wrap { display: flex; align-items: center; gap: 0.5rem; }
+  .pct-bar { height: 5px; border-radius: 3px; background: var(--red); min-width: 2px; }
+  .pagination {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.75rem 1.2rem; border-top: 1px solid var(--cream);
+    font-size: 0.75rem; color: var(--muted); font-family: 'DM Mono', monospace;
+  }
+  .page-btns { display: flex; gap: 0.4rem; }
+  .page-btn {
+    padding: 0.3rem 0.6rem; border: 1px solid var(--rule); border-radius: 5px;
+    background: transparent; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.75rem;
+    color: var(--ink); transition: all 0.12s;
+  }
+  .page-btn:hover { background: var(--ink); color: var(--paper); }
+  .page-btn:disabled { opacity: 0.35; cursor: default; }
+  .page-btn.current { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  /* VENDOR SPOTLIGHT */
+  .vendor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
+  .vendor-card {
+    background: var(--card); border-radius: 10px; padding: 1.2rem 1.4rem;
+    box-shadow: var(--shadow); animation: fadeUp 0.5s ease both;
+    cursor: default;
+  }
+  .vendor-name { font-weight: 800; font-size: 0.9rem; letter-spacing: 0.02em; }
+  .vendor-category { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.8rem; }
+  .vendor-stat-row { display: flex; justify-content: space-between; font-size: 0.78rem; margin-top: 0.3rem; }
+  .vendor-stat-label { color: var(--muted); }
+  .vendor-stat-val { font-family: 'DM Mono', monospace; font-weight: 500; }
+  .vendor-overcharge-bar { height: 3px; background: var(--cream); border-radius: 2px; margin-top: 0.8rem; overflow: hidden; }
+  .vendor-overcharge-fill { height: 100%; background: var(--red); border-radius: 2px; transition: width 1s ease; }
+
+  /* METHODOLOGY */
+  .methodology {
+    background: var(--ink); color: var(--paper); border-radius: 12px;
+    padding: 2rem 2.5rem; margin-bottom: 2.5rem;
+  }
+  .methodology h2 { font-family: 'DM Serif Display', serif; font-size: 1.6rem; margin-bottom: 1.2rem; }
+  .method-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.2rem; }
+  .method-step { }
+  .method-num { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: rgba(255,255,255,0.35); margin-bottom: 0.3rem; }
+  .method-step h4 { font-size: 0.88rem; font-weight: 600; margin-bottom: 0.25rem; }
+  .method-step p { font-size: 0.75rem; color: rgba(255,255,255,0.55); line-height: 1.5; }
+
+  /* RECOMMENDATIONS */
+  .reco-list { display: flex; flex-direction: column; gap: 0.75rem; }
+  .reco-item {
+    background: var(--card); border-radius: 8px; padding: 1rem 1.2rem;
+    box-shadow: var(--shadow); display: flex; gap: 1rem; align-items: flex-start;
+    animation: fadeUp 0.5s ease both;
+  }
+  .reco-num {
+    flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--ink); color: var(--paper); display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; font-weight: 800; margin-top: 0.1rem;
+  }
+  .reco-content h4 { font-size: 0.88rem; font-weight: 700; margin-bottom: 0.2rem; }
+  .reco-content p { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+
+  /* ERROR */
+  .error-box {
+    background: var(--red-soft); border: 1px solid #f5c2be; border-radius: 10px;
+    padding: 1.5rem 2rem; text-align: center;
+  }
+  .error-box h3 { color: var(--red); font-size: 1.1rem; margin-bottom: 0.5rem; }
+  .error-box p { color: var(--muted); font-size: 0.85rem; }
+
+  /* RESPONSIVE */
+  @media(max-width: 640px) {
+    .header { padding: 1.5rem 1.2rem; }
+    .header h1 { font-size: 1.8rem; }
+    .main { padding: 1.5rem 1rem 3rem; }
+    .chart-grid { grid-template-columns: 1fr; }
+    .header::after { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-top">
+    <div>
+      <div class="brand">
+        <div class="brand-dot"></div>
+        <span class="brand-name">Mosaic Wellness · Finance Intelligence</span>
+      </div>
+      <h1>Invoice <em>Audit</em><br>Intelligence</h1>
+      <p class="header-sub">CFO Dashboard · Vendor Overcharge Detection System</p>
+    </div>
+    <div id="status-pill" class="status-pill pill-loading">
+      <span class="pulse"></span>
+      <span id="status-text">Connecting to API…</span>
+    </div>
+  </div>
+</header>
+
+<main class="main" id="app">
+  <div class="loading-screen" id="loading">
+    <div class="loading-title">Fetching &amp; analysing data…</div>
+    <div class="progress-track"><div class="progress-bar" id="pbar" style="width:0%"></div></div>
+    <div class="progress-label" id="progress-label">Initialising…</div>
+  </div>
+</main>
+
+<script>
+/* ============================================================
+   DATA FETCHING
+   ============================================================ */
+const BASE = 'https://mosaicfellowship.in/api/data/finance';
+
+async function fetchAll(endpoint, label, onProgress) {
+  let all = [], page = 1;
+  while (true) {
+    const url = `${BASE}/${endpoint}?page=${page}&limit=100`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} on ${endpoint} page ${page}`);
+    const json = await res.json();
+    const rows = Array.isArray(json) ? json
+      : json.data ?? json.results ?? json.invoices ?? json.lineItems ?? json.rateCard ?? json.items ?? [];
+    all = all.concat(rows);
+    if (onProgress) onProgress(label, page, all.length);
+    if (rows.length < 100) break;
+    page++;
+  }
+  return all;
+}
+
+/* ============================================================
+   ANALYSIS ENGINE
+   ============================================================ */
+function analyse(invoices, lineItems, rateCard) {
+  // Build rate card lookup: vendor_id + service/item_type → contracted_rate
+  const rcMap = {};
+  for (const r of rateCard) {
+    const vid = r.vendor_id ?? r.vendorId ?? r.vendor ?? '';
+    const svc = (r.service_type ?? r.serviceType ?? r.item_type ?? r.itemType ?? r.category ?? '').toLowerCase().trim();
+    const rate = parseFloat(r.rate ?? r.contracted_rate ?? r.contractedRate ?? r.unit_price ?? 0);
+    if (vid) {
+      if (!rcMap[vid]) rcMap[vid] = {};
+      rcMap[vid][svc] = rate;
+    }
+  }
+
+  // Build invoice lookup
+  const invMap = {};
+  for (const inv of invoices) {
+    const id = inv.invoice_id ?? inv.invoiceId ?? inv.id ?? '';
+    invMap[id] = inv;
+  }
+
+  // Analyse each line item
+  const discrepancies = [];
+  let totalBilled = 0, totalContracted = 0, totalOvercharge = 0;
+  const vendorStats = {};
+
+  for (const li of lineItems) {
+    const invId   = li.invoice_id ?? li.invoiceId ?? li.invoice ?? '';
+    const inv     = invMap[invId] ?? {};
+    const vid     = li.vendor_id ?? li.vendorId ?? inv.vendor_id ?? inv.vendorId ?? inv.vendor ?? '';
+    const svc     = (li.service_type ?? li.serviceType ?? li.item_type ?? li.itemType ?? li.description ?? li.category ?? '').toLowerCase().trim();
+    const qty     = parseFloat(li.quantity ?? li.qty ?? 1);
+    const billedU = parseFloat(li.unit_price ?? li.unitPrice ?? li.rate ?? li.billed_rate ?? 0);
+    const billed  = parseFloat(li.amount ?? li.total ?? li.line_total ?? (billedU * qty));
+
+    // Find contracted rate
+    let contracted = null;
+    if (rcMap[vid]) {
+      contracted = rcMap[vid][svc] ?? rcMap[vid][''] ?? null;
+      // fuzzy match
+      if (contracted === null) {
+        for (const key of Object.keys(rcMap[vid])) {
+          if (svc.includes(key) || key.includes(svc)) { contracted = rcMap[vid][key]; break; }
+        }
+      }
+    }
+
+    const contractedAmt = contracted !== null ? contracted * qty : null;
+    const overcharge    = contractedAmt !== null ? billed - contractedAmt : null;
+    const pctOver       = contractedAmt !== null && contractedAmt > 0 ? ((overcharge / contractedAmt) * 100) : null;
+
+    totalBilled += billed || 0;
+    if (contractedAmt !== null) totalContracted += contractedAmt;
+    if (overcharge !== null && overcharge > 0) totalOvercharge += overcharge;
+
+    // Vendor stats
+    if (!vendorStats[vid]) vendorStats[vid] = {
+      vendor_id: vid,
+      vendor_name: inv.vendor_name ?? inv.vendorName ?? vid,
+      category: li.category ?? inv.category ?? inv.vendor_category ?? '',
+      total_billed: 0, total_contracted: 0, total_overcharge: 0, invoice_count: new Set(), line_count: 0, discrepancy_count: 0
+    };
+    vendorStats[vid].total_billed += billed || 0;
+    if (contractedAmt !== null) vendorStats[vid].total_contracted += contractedAmt;
+    if (overcharge !== null && overcharge > 0) {
+      vendorStats[vid].total_overcharge += overcharge;
+      vendorStats[vid].discrepancy_count++;
+    }
+    vendorStats[vid].invoice_count.add(invId);
+    vendorStats[vid].line_count++;
+
+    if (overcharge !== null && Math.abs(overcharge) > 0.01) {
+      discrepancies.push({
+        invoice_id: invId,
+        vendor_id: vid,
+        vendor_name: inv.vendor_name ?? inv.vendorName ?? vid,
+        service: svc || 'N/A',
+        quantity: qty,
+        billed_unit: billedU,
+        billed_amt: billed,
+        contracted_rate: contracted,
+        contracted_amt: contractedAmt,
+        overcharge,
+        pct_over: pctOver,
+        invoice_date: inv.invoice_date ?? inv.date ?? inv.invoiceDate ?? '',
+        severity: overcharge > 50000 ? 'critical' : overcharge > 10000 ? 'high' : overcharge > 0 ? 'medium' : 'credit'
+      });
+    }
+  }
+
+  // Sort vendors by overcharge
+  const vendors = Object.values(vendorStats).map(v => ({
+    ...v,
+    invoice_count: v.invoice_count.size,
+    overcharge_pct: v.total_contracted > 0 ? (v.total_overcharge / v.total_contracted) * 100 : 0
+  })).sort((a, b) => b.total_overcharge - a.total_overcharge);
+
+  discrepancies.sort((a, b) => b.overcharge - a.overcharge);
+
+  return { discrepancies, vendors, totalBilled, totalContracted, totalOvercharge, rcMap, invMap, vendorStats };
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function fmt(n, decimals = 0) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return new Intl.NumberFormat('en-IN', { maximumFractionDigits: decimals, minimumFractionDigits: decimals }).format(n);
+}
+function fmtCur(n, decimals = 2) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return '₹' + fmt(Math.abs(n), decimals);
+}
+function fmtPct(n) { return n === null ? '—' : n.toFixed(1) + '%'; }
+
+function renderApp(data, rawCounts) {
+  const { discrepancies, vendors, totalBilled, totalContracted, totalOvercharge, invMap } = data;
+  const overchargePct = totalContracted > 0 ? (totalOvercharge / totalContracted) * 100 : 0;
+  const criticalCount = discrepancies.filter(d => d.severity === 'critical').length;
+  const uniqueVendorsAffected = new Set(discrepancies.filter(d => d.overcharge > 0).map(d => d.vendor_id)).size;
+
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <!-- KPI ROW -->
+    <div class="kpi-row" style="margin-top:0">
+      <div class="kpi-card danger">
+        <div class="kpi-label">Total Overcharge Identified</div>
+        <div class="kpi-value danger">${fmtCur(totalOvercharge, 2)}</div>
+        <div class="kpi-sub">${fmtPct(overchargePct)} above contracted rates</div>
+      </div>
+      <div class="kpi-card warn">
+        <div class="kpi-label">Discrepancies Found</div>
+        <div class="kpi-value warn">${fmt(discrepancies.filter(d=>d.overcharge>0).length)}</div>
+        <div class="kpi-sub">${criticalCount} critical (>₹50K each)</div>
+      </div>
+      <div class="kpi-card neutral">
+        <div class="kpi-label">Vendors Audited</div>
+        <div class="kpi-value">${vendors.length}</div>
+        <div class="kpi-sub">${uniqueVendorsAffected} with overcharges</div>
+      </div>
+      <div class="kpi-card neutral">
+        <div class="kpi-label">Total Invoiced</div>
+        <div class="kpi-value">${fmtCur(totalBilled, 0)}</div>
+        <div class="kpi-sub">${fmt(rawCounts.invoices)} invoices · ${fmt(rawCounts.lineItems)} line items</div>
+      </div>
+      <div class="kpi-card ok">
+        <div class="kpi-label">Contracted Value</div>
+        <div class="kpi-value ok">${fmtCur(totalContracted, 0)}</div>
+        <div class="kpi-sub">${fmt(rawCounts.rateCard)} rate card entries</div>
+      </div>
+    </div>
+
+    <!-- KEY FINDINGS -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Key Findings</span>
+        <span class="section-count">Auditor's summary</span>
+      </div>
+      <div class="findings-grid" id="findings-grid"></div>
+    </div>
+
+    <!-- CHARTS -->
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h3>Overcharge by Vendor (Top 10)</h3>
+        <div class="chart-wrap"><canvas id="vendorChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Overcharge by Service Category</h3>
+        <div class="chart-wrap"><canvas id="svcChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Monthly Overcharge Trend</h3>
+        <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Severity Distribution</h3>
+        <div class="chart-wrap"><canvas id="sevChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- VENDOR SPOTLIGHT -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Vendor Profiles</span>
+        <span class="section-count">Sorted by overcharge value</span>
+      </div>
+      <div class="vendor-grid" id="vendor-grid"></div>
+    </div>
+
+    <!-- DISCREPANCY TABLE -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">All Discrepancies</span>
+        <span class="section-count" id="table-count"></span>
+      </div>
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <div>
+            <div class="section-count" style="font-size:0.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;">Filter by Severity</div>
+            <div class="filter-row" style="margin-top:0.4rem">
+              <button class="filter-btn active" data-sev="all">All</button>
+              <button class="filter-btn" data-sev="critical">Critical</button>
+              <button class="filter-btn" data-sev="high">High</button>
+              <button class="filter-btn" data-sev="medium">Medium</button>
+              <button class="filter-btn" data-sev="credit">Credits</button>
+            </div>
+          </div>
+          <input class="search-box" id="table-search" placeholder="Search vendor / service…"/>
+        </div>
+        <div style="overflow-x:auto">
+          <table id="disc-table">
+            <thead><tr>
+              <th data-col="invoice_id">Invoice</th>
+              <th data-col="vendor_name">Vendor ↕</th>
+              <th data-col="service">Service</th>
+              <th data-col="billed_amt">Billed ↕</th>
+              <th data-col="contracted_amt">Contracted</th>
+              <th data-col="overcharge">Overcharge ↕</th>
+              <th data-col="pct_over">% Over</th>
+              <th>Severity</th>
+            </tr></thead>
+            <tbody id="disc-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <span id="pag-info"></span>
+          <div class="page-btns" id="pag-btns"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- METHODOLOGY -->
+    <div class="methodology">
+      <h2>Audit Methodology</h2>
+      <div class="method-steps">
+        <div class="method-step"><div class="method-num">01</div><h4>Data Ingestion</h4><p>All pages of invoice headers, line items, and rate card fetched via paginated API and held in memory.</p></div>
+        <div class="method-step"><div class="method-num">02</div><h4>Rate Matching</h4><p>Each line item matched to its vendor's contracted rate using exact service-type key, then fuzzy substring match.</p></div>
+        <div class="method-step"><div class="method-num">03</div><h4>Overcharge Computation</h4><p>Overcharge = (Billed Unit Rate − Contracted Rate) × Quantity. Positive values indicate overcharging.</p></div>
+        <div class="method-step"><div class="method-num">04</div><h4>Severity Classification</h4><p>Critical > ₹50K, High > ₹10K, Medium > ₹0, Credit (negative) = undercharge or credit note.</p></div>
+        <div class="method-step"><div class="method-num">05</div><h4>Vendor Profiling</h4><p>Aggregate per-vendor overcharge, invoice count, and overcharge-to-contracted ratio surfaced for the CFO.</p></div>
+      </div>
+    </div>
+
+    <!-- RECOMMENDATIONS -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">CFO Recommendations</span>
+        <span class="section-count">Action items</span>
+      </div>
+      <div class="reco-list" id="reco-list"></div>
+    </div>
+  `;
+
+  // Findings
+  buildFindings(data, overchargePct, criticalCount, uniqueVendorsAffected);
+  // Charts
+  buildCharts(data);
+  // Vendors
+  buildVendorGrid(vendors);
+  // Table
+  initTable(discrepancies);
+  // Recommendations
+  buildRecos(data, overchargePct);
+}
+
+function buildFindings(data, overchargePct, criticalCount, uniqueVendors) {
+  const { discrepancies, vendors } = data;
+  const topVendor = vendors[0];
+  const overDiscs = discrepancies.filter(d => d.overcharge > 0);
+  
+  // Service overcharges
+  const bySvc = {};
+  for (const d of overDiscs) {
+    bySvc[d.service] = (bySvc[d.service] || 0) + d.overcharge;
+  }
+  const topSvc = Object.entries(bySvc).sort((a,b)=>b[1]-a[1])[0];
+
+  // Highest single overcharge
+  const biggest = overDiscs[0];
+
+  // Rate violations (billed > contracted by >20%)
+  const egregious = overDiscs.filter(d => d.pct_over > 20);
+
+  const cards = [
+    {
+      type: 'critical', severity: 'critical',
+      title: 'Total Recoverable Overcharge',
+      amount: fmtCur(data.totalOvercharge, 2),
+      amtClass: 'danger',
+      desc: `Across ${overDiscs.length} line items from ${uniqueVendors} vendors, the company has been billed ${fmtPct(overchargePct)} above contracted rates. This is the amount the CFO can seek to recover or credit against future invoices.`
+    },
+    topVendor && topVendor.total_overcharge > 0 ? {
+      type: 'critical', severity: 'critical',
+      title: `Top Offender: ${topVendor.vendor_name || topVendor.vendor_id}`,
+      amount: fmtCur(topVendor.total_overcharge, 2),
+      amtClass: 'danger',
+      desc: `${topVendor.vendor_name || topVendor.vendor_id} accounts for the largest single-vendor overcharge across ${topVendor.invoice_count} invoices (${fmtPct(topVendor.overcharge_pct)} above their contracted rate).`
+    } : null,
+    biggest ? {
+      type: 'critical', severity: 'critical',
+      title: 'Largest Single Line-Item Overcharge',
+      amount: fmtCur(biggest.overcharge, 2),
+      amtClass: 'danger',
+      desc: `Invoice ${biggest.invoice_id} from ${biggest.vendor_name} for service "${biggest.service}" was overcharged by ${fmtPct(biggest.pct_over)}. Billed: ${fmtCur(biggest.billed_amt, 2)} vs contracted: ${fmtCur(biggest.contracted_amt, 2)}.`
+    } : null,
+    topSvc ? {
+      type: 'warn', severity: 'warn',
+      title: `Highest-Risk Service: "${topSvc[0]}"`,
+      amount: fmtCur(topSvc[1], 2),
+      amtClass: 'warn',
+      desc: `The service category "${topSvc[0]}" has generated the most overcharge across all vendors. Consider renegotiating or auditing this category's rate card entries specifically.`
+    } : null,
+    egregious.length > 0 ? {
+      type: 'warn', severity: 'warn',
+      title: 'Rate Violations > 20% Above Contract',
+      amount: `${egregious.length} items`,
+      amtClass: 'warn',
+      desc: `${egregious.length} line items were billed more than 20% above the contracted rate — these are likely not rounding errors but systematic or deliberate overbilling. Total exposure: ${fmtCur(egregious.reduce((s,d)=>s+d.overcharge,0), 2)}.`
+    } : null,
+    criticalCount > 0 ? {
+      type: 'info', severity: 'info',
+      title: `${criticalCount} Critical Discrepancies (>₹50K each)`,
+      amount: fmtCur(discrepancies.filter(d=>d.severity==='critical').reduce((s,d)=>s+d.overcharge,0), 2),
+      amtClass: 'danger',
+      desc: 'These high-value discrepancies should be escalated to vendor relationship managers immediately for formal dispute resolution.'
+    } : null,
+  ].filter(Boolean);
+
+  const grid = document.getElementById('findings-grid');
+  grid.innerHTML = cards.map(c => `
+    <div class="finding-card ${c.type}">
+      <div class="finding-type ${c.type}">${c.type}</div>
+      <div class="finding-title">${c.title}</div>
+      <div class="finding-amount ${c.amtClass}">${c.amount}</div>
+      <div class="finding-desc">${c.desc}</div>
+    </div>
+  `).join('');
+}
+
+function buildCharts(data) {
+  const { discrepancies, vendors } = data;
+  const overDiscs = discrepancies.filter(d => d.overcharge > 0);
+  const palette = ['#c0392b','#e74c3c','#e67e22','#f39c12','#d35400','#922b21','#cb4335','#b03a2e','#7d6608','#9a7d0a'];
+  const chartDefaults = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { callbacks: {
+      label: ctx => ` ₹${new Intl.NumberFormat('en-IN').format(Math.round(ctx.parsed.y ?? ctx.parsed ?? 0))}`
+    }}}
+  };
+
+  // Vendor bar chart
+  const topVendors = vendors.filter(v=>v.total_overcharge>0).slice(0, 10);
+  new Chart(document.getElementById('vendorChart'), {
+    type: 'bar',
+    data: {
+      labels: topVendors.map(v => (v.vendor_name || v.vendor_id).substring(0,20)),
+      datasets: [{ data: topVendors.map(v=>v.total_overcharge), backgroundColor: palette, borderRadius: 4 }]
+    },
+    options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, legend: { display: false } },
+      scales: { y: { ticks: { callback: v => '₹'+fmt(v) }, grid: { color:'#f0ece4'} }, x: { ticks: { font: { family:'DM Mono', size:10 } } } }
+    }
+  });
+
+  // Service pie
+  const bySvc = {};
+  for (const d of overDiscs) bySvc[d.service] = (bySvc[d.service]||0) + d.overcharge;
+  const svcEntries = Object.entries(bySvc).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  new Chart(document.getElementById('svcChart'), {
+    type: 'doughnut',
+    data: {
+      labels: svcEntries.map(e=>e[0]),
+      datasets: [{ data: svcEntries.map(e=>e[1]), backgroundColor: palette, borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { font: { family:'DM Mono', size:10 }, padding: 12 }},
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ₹${fmt(ctx.parsed)}` }}
+      }
+    }
+  });
+
+  // Monthly trend
+  const byMonth = {};
+  for (const d of overDiscs) {
+    const dt = d.invoice_date ? d.invoice_date.substring(0,7) : 'Unknown';
+    byMonth[dt] = (byMonth[dt]||0) + d.overcharge;
+  }
+  const months = Object.keys(byMonth).sort();
+  new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [{ data: months.map(m=>byMonth[m]), borderColor:'#c0392b', backgroundColor:'rgba(192,57,43,0.08)',
+        fill: true, tension: 0.4, pointBackgroundColor:'#c0392b', pointRadius: 4 }]
+    },
+    options: { ...chartDefaults, plugins: { ...chartDefaults.plugins },
+      scales: { y: { ticks: { callback: v=>'₹'+fmt(v) }, grid: { color:'#f0ece4' } }, x: { ticks: { font: { family:'DM Mono', size:10 } } } }
+    }
+  });
+
+  // Severity doughnut
+  const sev = { critical: 0, high: 0, medium: 0, credit: 0 };
+  for (const d of discrepancies) sev[d.severity] = (sev[d.severity]||0) + 1;
+  new Chart(document.getElementById('sevChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Critical', 'High', 'Medium', 'Credit/Under'],
+      datasets: [{ data: [sev.critical, sev.high, sev.medium, sev.credit],
+        backgroundColor: ['#c0392b','#e67e22','#f39c12','#2ecc71'], borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { font: { family:'DM Mono', size:10 }, padding:12 }},
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed} items` }}
+      }
+    }
+  });
+}
+
+function buildVendorGrid(vendors) {
+  const grid = document.getElementById('vendor-grid');
+  const topVendors = vendors.filter(v=>v.total_overcharge > 0 || v.total_billed > 0).slice(0,12);
+  const maxOver = Math.max(...topVendors.map(v=>v.total_overcharge));
+  grid.innerHTML = topVendors.map(v => `
+    <div class="vendor-card">
+      <div class="vendor-name">${v.vendor_name || v.vendor_id}</div>
+      <div class="vendor-category">${v.category || 'Vendor'} · ${v.invoice_count} invoices</div>
+      <div class="vendor-stat-row"><span class="vendor-stat-label">Total Billed</span><span class="vendor-stat-val">${fmtCur(v.total_billed,0)}</span></div>
+      <div class="vendor-stat-row"><span class="vendor-stat-label">Contracted</span><span class="vendor-stat-val">${fmtCur(v.total_contracted,0)}</span></div>
+      <div class="vendor-stat-row"><span class="vendor-stat-label">Overcharge</span><span class="vendor-stat-val" style="color:var(--red)">${fmtCur(v.total_overcharge,2)}</span></div>
+      <div class="vendor-stat-row"><span class="vendor-stat-label">% Over Contract</span><span class="vendor-stat-val" style="color:${v.overcharge_pct>10?'var(--red)':'var(--amber)'}">${fmtPct(v.overcharge_pct)}</span></div>
+      <div class="vendor-overcharge-bar"><div class="vendor-overcharge-fill" style="width:${maxOver>0?Math.round((v.total_overcharge/maxOver)*100):0}%"></div></div>
+    </div>
+  `).join('');
+}
+
+// TABLE WITH SORT + FILTER + PAGINATION + SEARCH
+let tableData = [], filteredData = [], currentPage = 1, pageSize = 25, sortCol = 'overcharge', sortDir = -1, filterSev = 'all', searchQ = '';
+
+function initTable(discrepancies) {
+  tableData = discrepancies;
+  document.querySelectorAll('.filter-btn').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    filterSev = btn.dataset.sev;
+    currentPage = 1; applyFilters();
+  }));
+  document.getElementById('table-search').addEventListener('input', e => {
+    searchQ = e.target.value.toLowerCase(); currentPage = 1; applyFilters();
+  });
+  document.querySelectorAll('th[data-col]').forEach(th => th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sortCol === col) sortDir *= -1; else { sortCol = col; sortDir = -1; }
+    applyFilters();
+  }));
+  applyFilters();
+}
+
+function applyFilters() {
+  filteredData = tableData.filter(d => {
+    if (filterSev !== 'all' && d.severity !== filterSev) return false;
+    if (searchQ && !`${d.vendor_name} ${d.service} ${d.invoice_id}`.toLowerCase().includes(searchQ)) return false;
+    return true;
+  });
+  filteredData.sort((a,b) => {
+    const av = a[sortCol] ?? '', bv = b[sortCol] ?? '';
+    return typeof av === 'number' ? (av - bv) * sortDir : String(av).localeCompare(String(bv)) * sortDir;
+  });
+  document.getElementById('table-count').textContent = `${fmt(filteredData.length)} discrepancies`;
+  renderTable();
+}
+
+function renderTable() {
+  const start = (currentPage - 1) * pageSize;
+  const page  = filteredData.slice(start, start + pageSize);
+  const tbody = document.getElementById('disc-tbody');
+  tbody.innerHTML = page.map(d => `
+    <tr>
+      <td class="mono" style="font-size:0.72rem">${d.invoice_id}</td>
+      <td style="font-weight:600;font-size:0.8rem">${d.vendor_name}</td>
+      <td style="font-size:0.75rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.service}</td>
+      <td class="mono">${fmtCur(d.billed_amt, 2)}</td>
+      <td class="mono">${fmtCur(d.contracted_amt, 2)}</td>
+      <td class="mono ${d.overcharge > 0 ? 'text-red' : 'text-green'}">${d.overcharge > 0 ? '+' : ''}${fmtCur(d.overcharge, 2)}</td>
+      <td>
+        <div class="pct-bar-wrap">
+          <div class="pct-bar" style="width:${Math.min(Math.abs(d.pct_over||0), 100)}px;background:${d.overcharge>0?'var(--red)':'var(--green)'}"></div>
+          <span class="mono" style="font-size:0.72rem">${fmtPct(d.pct_over)}</span>
+        </div>
+      </td>
+      <td><span class="badge badge-${d.severity==='critical'?'red':d.severity==='high'?'amber':d.severity==='medium'?'amber':d.severity==='credit'?'green':'gray'}">${d.severity}</span></td>
+    </tr>
+  `).join('');
+
+  const total = filteredData.length;
+  const totalPages = Math.ceil(total / pageSize);
+  document.getElementById('pag-info').textContent = `${start+1}–${Math.min(start+pageSize,total)} of ${fmt(total)}`;
+  const btnsEl = document.getElementById('pag-btns');
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - currentPage) <= 2) pages.push(i);
+    else if (pages[pages.length-1] !== '…') pages.push('…');
+  }
+  btnsEl.innerHTML = `
+    <button class="page-btn" ${currentPage===1?'disabled':''} onclick="gotoPage(${currentPage-1})">‹</button>
+    ${pages.map(p => p === '…' ? `<span style="padding:0 0.3rem;color:var(--muted)">…</span>` : `<button class="page-btn ${p===currentPage?'current':''}" onclick="gotoPage(${p})">${p}</button>`).join('')}
+    <button class="page-btn" ${currentPage===totalPages?'disabled':''} onclick="gotoPage(${currentPage+1})">›</button>
+  `;
+}
+
+function gotoPage(p) { currentPage = p; renderTable(); window.scrollTo({top: document.getElementById('disc-table').offsetTop - 80, behavior:'smooth'}); }
+
+function buildRecos(data, overchargePct) {
+  const { discrepancies, vendors } = data;
+  const topVendor = vendors[0];
+  const topVendors3 = vendors.filter(v=>v.total_overcharge>0).slice(0,3).map(v=>v.vendor_name||v.vendor_id).join(', ');
+  const recos = [
+    { title: 'Immediate Recovery: Issue Debit Notes', body: `Issue formal debit notes to all ${new Set(discrepancies.filter(d=>d.overcharge>0).map(d=>d.vendor_id)).size} offending vendors for a combined recovery of ${fmtCur(data.totalOvercharge, 2)}. Prioritise the top 3 vendors (${topVendors3}) who account for the majority of the overcharge.` },
+    { title: 'Contract Rate Card Enforcement', body: `Implement a pre-payment invoice validation workflow that automatically flags any line item billed above the contracted rate before approval. This system alone would have caught ${discrepancies.filter(d=>d.overcharge>0).length} discrepancies this period.` },
+    { title: `Escalate ${topVendor ? (topVendor.vendor_name||topVendor.vendor_id) : 'Top Vendor'} Relationship`, body: `The highest-risk vendor relationship should be reviewed immediately. Schedule a formal reconciliation meeting, present the audit findings, and negotiate a credit memo or rate renegotiation before the next billing cycle.` },
+    { title: 'Monthly Automated Audit Cadence', body: `Deploy this system as a monthly automated audit running within 48 hours of invoice submission. Set a hard threshold: any discrepancy >₹10,000 triggers an automatic hold on payment pending vendor clarification.` },
+    { title: 'Rate Card Centralisation', body: `Consolidate all vendor rate cards into a single source of truth (ERP or contract management system). The current fragmentation across contracts and spreadsheets is the root cause enabling systematic overbilling.` },
+  ];
+  document.getElementById('reco-list').innerHTML = recos.map((r, i) => `
+    <div class="reco-item">
+      <div class="reco-num">${i+1}</div>
+      <div class="reco-content"><h4>${r.title}</h4><p>${r.body}</p></div>
+    </div>
+  `).join('');
+}
+
+/* ============================================================
+   ORCHESTRATOR
+   ============================================================ */
+(async function main() {
+  const pill = document.getElementById('status-pill');
+  const statusText = document.getElementById('status-text');
+  const pbar = document.getElementById('pbar');
+  const progressLabel = document.getElementById('progress-label');
+
+  function setProgress(pct, label) {
+    pbar.style.width = pct + '%';
+    progressLabel.textContent = label;
+  }
+
+  try {
+    setProgress(5, 'Fetching invoice headers…');
+    statusText.textContent = 'Fetching invoices…';
+
+    const [invoices, lineItems, rateCard] = await Promise.all([
+      fetchAll('invoices', 'invoices', (_, pg, n) => setProgress(10 + pg*5, `Invoices: ${n} rows fetched…`)),
+      fetchAll('line-items', 'lineItems', (_, pg, n) => setProgress(30 + pg*5, `Line items: ${n} rows fetched…`)),
+      fetchAll('rate-card', 'rateCard', (_, pg, n) => setProgress(60 + pg*5, `Rate card: ${n} entries fetched…`)),
+    ]);
+
+    setProgress(80, 'Running audit analysis…');
+    statusText.textContent = 'Analysing…';
+
+    const analysisData = analyse(invoices, lineItems, rateCard);
+    setProgress(95, 'Rendering dashboard…');
+
+    // Update pill
+    pill.className = 'status-pill pill-done';
+    statusText.textContent = `✓ Audit complete · ${new Date().toLocaleTimeString()}`;
+
+    // Set numerical answer in header
+    const totalOvercharge = analysisData.totalOvercharge;
+    const answerEl = document.createElement('div');
+    answerEl.style.cssText = 'margin-top:1rem;padding:0.6rem 1rem;background:rgba(255,255,255,0.07);border-radius:8px;font-family:DM Mono,monospace;font-size:0.85rem;color:#e8b89a;display:inline-block';
+    answerEl.innerHTML = `Numerical Answer: <strong style="color:#fff">₹${totalOvercharge.toFixed(2)}</strong>`;
+    document.querySelector('.header').appendChild(answerEl);
+
+    renderApp(analysisData, { invoices: invoices.length, lineItems: lineItems.length, rateCard: rateCard.length });
+
+  } catch (err) {
+    pill.className = 'status-pill pill-err';
+    statusText.textContent = 'API error';
+    document.getElementById('app').innerHTML = `
+      <div class="error-box" style="margin-top:3rem">
+        <h3>Could not connect to Mosaic Wellness API</h3>
+        <p style="margin-top:0.5rem">${err.message}</p>
+        <p style="margin-top:1rem">Ensure the API is publicly accessible and CORS headers allow browser requests. The app will work perfectly once deployed to Vercel/Netlify from the public internet.</p>
+      </div>`;
+  }
+})();
+</script>
+</body>
+</html>
